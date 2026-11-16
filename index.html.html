@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Coanda-Jet 24 CARGO (2,40 m) - 3D Interaktív Mérnöki Modell v2</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; background: #0b1120; font-family: 'Segoe UI', Tahoma, sans-serif; color: #f8fafc; user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #ui { position: absolute; top: 15px; left: 15px; background: rgba(15, 23, 42, 0.92); padding: 16px; border-radius: 10px; border: 1px solid #334155; width: 315px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 10; }
+  h1 { font-size: 15px; margin: 0 0 6px 0; color: #38bdf8; letter-spacing: 0.5px; }
+  p { font-size: 11.5px; color: #cbd5e1; margin: 0 0 12px 0; line-height: 1.4; }
+  button { display: block; width: 100%; margin-bottom: 7px; padding: 8px 11px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; text-align: left; transition: 0.15s; }
+  button:hover { background: #0284c7; border-color: #38bdf8; }
+  button.active { background: #0369a1; border-color: #38bdf8; }
+  .legend { font-size: 11px; margin-top: 10px; border-top: 1px solid #334155; padding-top: 8px; line-height: 1.6; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+  #specs { position: absolute; top: 15px; right: 15px; background: rgba(15, 23, 42, 0.88); padding: 12px 15px; border-radius: 10px; border: 1px solid #334155; font-size: 11px; color: #cbd5e1; line-height: 1.55; pointer-events: none; }
+  #specs strong { color: #38bdf8; }
+  #hint { position: absolute; bottom: 12px; right: 15px; font-size: 11px; color: #94a3b8; background: rgba(15,23,42,0.8); padding: 6px 10px; border-radius: 6px; border: 1px solid #1e293b; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>COANDA-JET 24 CARGO (2,40 m)</h1>
+  <p>Rev. 5.6 méretarányos, offline 3D CAD modell (24 koaxiális modul, 420 mm Venturi-köpeny).</p>
+  <button id="btnCutaway" class="active" onclick="toggleCutaway()">Negyedmetszet (Cutaway): BE</button>
+  <button id="btnAnim" class="active" onclick="toggleAnim()">6-Hullámos Dugattyúüzem: BE</button>
+  <button id="btnVector" onclick="toggleVector()">Sugárvektorálás (+20 fok): KI</button>
+  <button id="btnFlow" class="active" onclick="toggleFlow()">Coanda Légáramlás: BE</button>
+  <button onclick="resetCam()">Alapértelmezett Kamera Nézet</button>
+  <div class="legend">
+    <div><span class="dot" style="background:#475569"></span>T800S/Nomex Coanda-Venturi köpeny</div>
+    <div><span class="dot" style="background:#f59e0b"></span>210 mm kónuszos pumpadugattyú</div>
+    <div><span class="dot" style="background:#38bdf8"></span>72 mm He-N2 visszatérítő légrugó</div>
+    <div><span class="dot" style="background:#ef4444"></span>48,56 mm Nikasil égéstér</div>
+    <div><span class="dot" style="background:#10b981"></span>24 db sugárvektoráló terelőlap</div>
+  </div>
+</div>
+
+<div id="specs">
+  <strong>REV. 5.6 CARGO ADATOK</strong><br>
+  Külső / belső átmérő: 2,40 m / 1,65 m<br>
+  Venturi magasság: 420 mm (7,5 fok)<br>
+  Modulok: 24 db (2000 cm3, 36 Hz)<br>
+  Emelőerő: 3250 N (331,4 kgf)<br>
+  Hasznos teher: 137,66 kg (MTOW 315,6 kg)<br>
+  Végsebesség: 136,5 km/h
+</div>
+
+<div id="hint">Bal egérgomb: 3D Forgatás | Görgő: Nagyítás | Jobb egérgomb: Eltolás</div>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Camera state
+let yaw = 0.68;
+let pitch = 0.52;
+let zoom = 260;
+let panX = 0;
+let panY = 20;
+
+let isCutaway = true;
+let isAnim = true;
+let isVector = false;
+let isFlow = true;
+
+function toggleCutaway() {
+  isCutaway = !isCutaway;
+  const b = document.getElementById('btnCutaway');
+  b.textContent = 'Negyedmetszet (Cutaway): ' + (isCutaway ? 'BE' : 'KI');
+  b.classList.toggle('active', isCutaway);
+}
+function toggleAnim() {
+  isAnim = !isAnim;
+  const b = document.getElementById('btnAnim');
+  b.textContent = '6-Hullámos Dugattyúüzem: ' + (isAnim ? 'BE' : 'KI');
+  b.classList.toggle('active', isAnim);
+}
+function toggleVector() {
+  isVector = !isVector;
+  const b = document.getElementById('btnVector');
+  b.textContent = 'Sugárvektorálás (+20 fok): ' + (isVector ? 'BE' : 'KI');
+  b.classList.toggle('active', isVector);
+}
+function toggleFlow() {
+  isFlow = !isFlow;
+  const b = document.getElementById('btnFlow');
+  b.textContent = 'Coanda Légáramlás: ' + (isFlow ? 'BE' : 'KI');
+  b.classList.toggle('active', isFlow);
+}
+function resetCam() {
+  yaw = 0.68; pitch = 0.52; zoom = 260; panX = 0; panY = 20;
+}
+
+// Mouse controls
+let dragging = false, rightDrag = false, lastX = 0, lastY = 0;
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) rightDrag = true; else dragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+});
+window.addEventListener('mouseup', () => { dragging = false; rightDrag = false; });
+window.addEventListener('mousemove', e => {
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  if (dragging) {
+    yaw += dx * 0.008;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch + dy * 0.008));
+  } else if (rightDrag) {
+    panX += dx;
+    panY += dy;
+  }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom *= (e.deltaY > 0 ? 0.92 : 1.08);
+  zoom = Math.max(90, Math.min(750, zoom));
+}, { passive: false });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// 3D Math helpers
+function project(x, y, z) {
+  // Rotate around Y (yaw)
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const x1 = x * cy - z * sy;
+  const z1 = x * sy + z * cy;
+  // Rotate around X (pitch)
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const y2 = y * cp - z1 * sp;
+  const z2 = y * sp + z1 * cp;
+  // Perspective
+  const fov = 5.2;
+  const scale = (fov / (fov + z2)) * zoom;
+  return {
+    sx: W / 2 + panX + x1 * scale,
+    sy: H / 2 + panY - y2 * scale,
+    depth: z2,
+    scale: scale
+  };
+}
+
+function shadeColor(hex, factor) {
+  const num = parseInt(hex.slice(1), 16);
+  let r = Math.min(255, Math.max(0, Math.round(((num >> 16) & 255) * factor)));
+  let g = Math.min(255, Math.max(0, Math.round(((num >> 8) & 255) * factor)));
+  let b = Math.min(255, Math.max(0, Math.round((num & 255) * factor)));
+  return `rgb(${r},${g},${b})`;
+}
+
+// Airflow particles
+const particles = [];
+for (let i = 0; i < 80; i++) {
+  particles.push({
+    ang: (i / 80) * Math.PI * 2,
+    r: 0.30 + (i % 5) * 0.14,
+    y: Math.random() * 1.3 - 0.55,
+    spd: 0.015 + (i % 4) * 0.003
+  });
+}
+
+function drawCylinder3D(polys, cx, cy, cz, rTop, rBot, h, segs, colorHex, strokeHex) {
+  const y0 = cy - h / 2;
+  const y1 = cy + h / 2;
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    const p00 = project(cx + rBot * Math.cos(a0), y0, cz + rBot * Math.sin(a0));
+    const p10 = project(cx + rBot * Math.cos(a1), y0, cz + rBot * Math.sin(a1));
+    const p11 = project(cx + rTop * Math.cos(a1), y1, cz + rTop * Math.sin(a1));
+    const p01 = project(cx + rTop * Math.cos(a0), y1, cz + rTop * Math.sin(a0));
+    const light = 0.72 + 0.35 * Math.cos(a0 - yaw + 0.6);
+    polys.push({
+      pts: [p00, p10, p11, p01],
+      depth: (p00.depth + p10.depth + p11.depth + p01.depth) / 4,
+      fill: shadeColor(colorHex, light),
+      stroke: strokeHex || 'rgba(15,23,42,0.45)',
+      lw: 0.7
+    });
+  }
+  // Top cap
+  const topPts = [];
+  let dSum = 0;
+  for (let i = 0; i < segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const p = project(cx + rTop * Math.cos(a), y1, cz + rTop * Math.sin(a));
+    topPts.push(p);
+    dSum += p.depth;
+  }
+  polys.push({
+    pts: topPts,
+    depth: dSum / segs - 0.002,
+    fill: shadeColor(colorHex, 1.12),
+    stroke: strokeHex || 'rgba(15,23,42,0.5)',
+    lw: 0.8
+  });
+}
+
+function render(timeMs) {
+  const t = timeMs * 0.001;
+  ctx.clearRect(0, 0, W, H);
+
+  // Reference ground grid
+  ctx.strokeStyle = 'rgba(51, 65, 85, 0.35)';
+  ctx.lineWidth = 1;
+  for (let g = -2.0; g <= 2.01; g += 0.5) {
+    const a1 = project(g, -0.46, -2.0), a2 = project(g, -0.46, 2.0);
+    ctx.beginPath(); ctx.moveTo(a1.sx, a1.sy); ctx.lineTo(a2.sx, a2.sy); ctx.stroke();
+    const b1 = project(-2.0, -0.46, g), b2 = project(2.0, -0.46, g);
+    ctx.beginPath(); ctx.moveTo(b1.sx, b1.sy); ctx.lineTo(b2.sx, b2.sy); ctx.stroke();
+  }
+
+  const polys = [];
+  const lines = [];
+
+  // 1. Central Hub (BRS + FPGA, R=0.22m, y=0.22m)
+  drawCylinder3D(polys, 0, 0.22, 0, 0.22, 0.22, 0.14, 20, '#64748b', '#1e293b');
+
+  // 2. 8 Internal Tension Spokes (R=0.22m to R=0.825m)
+  for (let k = 0; k < 8; k++) {
+    const ang = (k * Math.PI / 4) + Math.PI / 8;
+    const p1 = project(0.22 * Math.cos(ang), 0.22, 0.22 * Math.sin(ang));
+    const p2 = project(0.83 * Math.cos(ang), 0.22, 0.83 * Math.sin(ang));
+    lines.push({ p1, p2, depth: (p1.depth + p2.depth) / 2, color: '#94a3b8', lw: 3.0 });
+  }
+
+  // 3. Landing Skids & Cargo Frame below
+  [-0.44, 0.44].forEach(zPos => {
+    const s1 = project(-0.65, -0.44, zPos), s2 = project(0.65, -0.44, zPos);
+    lines.push({ p1: s1, p2: s2, depth: (s1.depth + s2.depth) / 2, color: '#64748b', lw: 4.0 });
+    [-0.35, 0.35].forEach(xPos => {
+      const t1 = project(xPos, -0.44, zPos), t2 = project(xPos * 0.85, 0.16, zPos * 0.65);
+      lines.push({ p1: t1, p2: t2, depth: (t1.depth + t2.depth) / 2, color: '#475569', lw: 3.0 });
+    });
+  });
+
+  // 4. 24 Coaxial Free-Piston Modules (R_mid = 1.0125m)
+  const R_mid = 1.0125;
+  for (let i = 0; i < 24; i++) {
+    const deg = i * 15;
+    const rad = (deg * Math.PI) / 180;
+    const mx = R_mid * Math.cos(rad);
+    const mz = R_mid * Math.sin(rad);
+    const wave = i % 6;
+    const stroke = isAnim ? 0.022 * Math.sin(t * 15.0 + (wave * Math.PI) / 3) : 0;
+
+    // Combustion Cylinder (bottom, red)
+    drawCylinder3D(polys, mx, 0.08, mz, 0.036, 0.036, 0.11, 10, '#ef4444', '#7f1d1d');
+    // He-N2 Gas Spring (middle, blue)
+    drawCylinder3D(polys, mx, 0.20, mz, 0.048, 0.048, 0.09, 10, '#38bdf8', '#0c4a6e');
+    // Conical Pump Piston (top, amber, animated)
+    drawCylinder3D(polys, mx, 0.31 + stroke, mz, 0.105, 0.092, 0.04, 12, '#f59e0b', '#78350f');
+
+    // Thrust-Vectoring Flap at bottom lip (green)
+    const flapTilt = isVector ? 0.38 : 0.0;
+    const fw = 0.08, fh = 0.055;
+    const tx = -Math.sin(rad), tz = Math.cos(rad);
+    const nx = Math.cos(rad), nz = Math.sin(rad);
+    const shiftX = isVector ? 0.025 : 0;
+    const f0 = project(mx - tx * fw, 0.0, mz - tz * fw);
+    const f1 = project(mx + tx * fw, 0.0, mz + tz * fw);
+    const f2 = project(mx + tx * fw + shiftX, -fh * Math.cos(flapTilt), mz + tz * fw);
+    const f3 = project(mx - tx * fw + shiftX, -fh * Math.cos(flapTilt), mz - tz * fw);
+    polys.push({
+      pts: [f0, f1, f2, f3],
+      depth: (f0.depth + f1.depth + f2.depth + f3.depth) / 4,
+      fill: '#10b981',
+      stroke: '#064e3b',
+      lw: 0.8
+    });
+  }
+
+  // 5. Bell-shaped Venturi Coanda Shroud (R_in=0.825m, R_out=1.200m, H=0.420m)
+  const segsRing = 48;
+  const profile = [
+    [0.865, 0.42], [1.160, 0.42], [1.200, 0.36], [1.185, 0.18],
+    [1.145, 0.00], [0.880, 0.00], [0.840, 0.18], [0.825, 0.36]
+  ];
+  for (let i = 0; i < segsRing; i++) {
+    const a0 = (i / segsRing) * Math.PI * 2;
+    const a1 = ((i + 1) / segsRing) * Math.PI * 2;
+    // Cutaway front-right quarter (0 to 95 deg)
+    if (isCutaway && a0 >= 0.0 && a0 < 1.65) continue;
+
+    for (let p = 0; p < profile.length; p++) {
+      const [rA, yA] = profile[p];
+      const [rB, yB] = profile[(p + 1) % profile.length];
+      const v00 = project(rA * Math.cos(a0), yA, rA * Math.sin(a0));
+      const v10 = project(rA * Math.cos(a1), yA, rA * Math.sin(a1));
+      const v11 = project(rB * Math.cos(a1), yB, rB * Math.sin(a1));
+      const v01 = project(rB * Math.cos(a0), yB, rB * Math.sin(a0));
+      const light = 0.78 + 0.28 * Math.cos(a0 - yaw + 0.5);
+      polys.push({
+        pts: [v00, v10, v11, v01],
+        depth: (v00.depth + v10.depth + v11.depth + v01.depth) / 4,
+        fill: isCutaway ? `rgba(71, 85, 105, 0.58)` : shadeColor('#475569', light),
+        stroke: 'rgba(148, 163, 184, 0.25)',
+        lw: 0.5
+      });
+    }
+  }
+
+  // Cutaway end-caps (solid cross-section faces at 0 deg and 95 deg)
+  if (isCutaway) {
+    [0.0, 1.696].forEach(capAng => {
+      const capPts = profile.map(([r, y]) => project(r * Math.cos(capAng), y, r * Math.sin(capAng)));
+      const dAvg = capPts.reduce((acc, v) => acc + v.depth, 0) / capPts.length;
+      polys.push({
+        pts: capPts,
+        depth: dAvg - 0.01,
+        fill: '#94a3b8',
+        stroke: '#f8fafc',
+        lw: 1.4
+      });
+    });
+  }
+
+  // Depth sort (Painter's algorithm: farthest first)
+  polys.sort((a, b) => b.depth - a.depth);
+  lines.sort((a, b) => b.depth - a.depth);
+
+  // Draw lines first/interleaved
+  lines.forEach(l => {
+    ctx.strokeStyle = l.color;
+    ctx.lineWidth = l.lw;
+    ctx.beginPath();
+    ctx.moveTo(l.p1.sx, l.p1.sy);
+    ctx.lineTo(l.p2.sx, l.p2.sy);
+    ctx.stroke();
+  });
+
+  // Draw sorted polygons
+  polys.forEach(poly => {
+    ctx.fillStyle = poly.fill;
+    ctx.strokeStyle = poly.stroke;
+    ctx.lineWidth = poly.lw;
+    ctx.beginPath();
+    ctx.moveTo(poly.pts[0].sx, poly.pts[0].sy);
+    for (let k = 1; k < poly.pts.length; k++) {
+      ctx.lineTo(poly.pts[k].sx, poly.pts[k].sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  // 6. Animated Coanda Downwash Streamlines
+  if (isFlow) {
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.72)';
+    ctx.lineWidth = 2.0;
+    particles.forEach(pt => {
+      pt.y -= pt.spd;
+      if (pt.y < -0.58) pt.y = 0.68;
+      const vecShift = isVector ? (0.68 - pt.y) * 0.34 : 0;
+      const xTop = pt.r * Math.cos(pt.ang) - vecShift;
+      const zTop = pt.r * Math.sin(pt.ang);
+      const yBot = pt.y - 0.14;
+      const vecShiftBot = isVector ? (0.68 - yBot) * 0.34 : 0;
+      const xBot = pt.r * Math.cos(pt.ang) - vecShiftBot;
+      const pTop = project(xTop, pt.y, zTop);
+      const pBot = project(xBot, yBot, zTop);
+      ctx.beginPath();
+      ctx.moveTo(pTop.sx, pTop.sy);
+      ctx.lineTo(pBot.sx, pBot.sy);
+      ctx.stroke();
+    });
+  }
+
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
